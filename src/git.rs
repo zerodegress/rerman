@@ -1,11 +1,7 @@
-use std::{
-    borrow::Cow,
-    path::{Path, PathBuf},
-    process::Stdio,
-};
+use std::{path::PathBuf, process::Stdio};
 
 use anyhow::anyhow;
-use lazy_regex::{regex_captures, regex_is_match};
+use lazy_regex::regex_captures;
 use tokio::process::Command;
 use url::Url;
 
