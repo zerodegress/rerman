@@ -36,6 +36,12 @@ pub enum Commands {
         with: Option<String>,
         target: String,
     },
+    Config {
+        #[arg(long)]
+        edit: bool,
+        #[arg(long)]
+        with: Option<String>,
+    },
 }
 
 pub enum RerSetup {
@@ -238,6 +244,20 @@ impl Rer {
                     }
                 }
                 Err(anyhow!("target not found"))
+            }
+            Commands::Config { edit, with } => {
+                if *edit {
+                    let with_editor = with.to_owned().ok_or_else(|| anyhow!("no editor specified"))?;
+                    tokio::process::Command::new(with_editor)
+                        .arg(self.config_file()?)
+                        .stdout(Stdio::inherit())
+                        .spawn()?
+                        .wait()
+                        .await?;
+                    Ok(())
+                } else {
+                    Err(anyhow!("unspecified behaviour"))
+                }
             }
         }
     }
