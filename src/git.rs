@@ -34,6 +34,17 @@ impl Git {
             .await
             .map_err(anyhow::Error::new)
     }
+
+    pub async fn init(&self, path: impl AsRef<str>) -> anyhow::Result<std::process::ExitStatus> {
+        Command::new(&self.exe)
+            .arg("init")
+            .arg(path.as_ref())
+            .stdout(Stdio::inherit())
+            .spawn()?
+            .wait()
+            .await
+            .map_err(anyhow::Error::new)
+    } 
 }
 
 pub enum GitUrl {

@@ -2,6 +2,7 @@ use std::{env::current_dir, path::PathBuf, process::Stdio};
 
 use anyhow::anyhow;
 use clap::{Parser, Subcommand};
+use tabled::Tabled;
 
 use crate::{
     config::Config,
@@ -26,8 +27,8 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     Clone {
-        #[arg(long, default_value = "true")]
-        git: bool,
+        #[arg(long, default_value = "git")]
+        r#type: String,
         target: String,
     },
     Setup,
@@ -42,6 +43,19 @@ pub enum Commands {
         #[arg(long)]
         with: Option<String>,
     },
+    Create {
+        #[arg(long, default_value = "git")]
+        r#type: String,
+        #[arg(long, default_value = "localhost")]
+        hostname: String,
+        target: String,
+    },
+    List {
+        #[arg(long)]
+        r#type: Option<String>,
+        #[arg(long)]
+        hostname: Option<String>,
+    }
 }
 
 pub enum RerSetup {
@@ -55,6 +69,13 @@ pub struct Rer {
     cli: Cli,
     setup: RerSetup,
     config: Config,
+}
+
+#[derive(Tabled)]
+pub struct RepoTableItem {
+    path: String,
+    r#type: String,
+    hostname: String,
 }
 
 impl Rer {
@@ -119,6 +140,12 @@ impl Rer {
         }
     }
 
+    fn path_of(&self, ty: impl AsRef<str>, hostname: impl AsRef<str>, username: impl AsRef<str>, path: impl AsRef<str>) -> anyhow::Result<PathBuf> {
+        Ok((self.repo_dir()?).join(ty.as_ref()).join(hostname.as_ref())
+            .join(username.as_ref())
+            .join(path.as_ref()))
+    }
+
     pub async fn parse() -> anyhow::Result<Self> {
         let cli = Cli::parse();
         let setup = if cli.system {
@@ -169,22 +196,25 @@ impl Rer {
 
     pub async fn run(&self) -> anyhow::Result<()> {
         match &self.cli.commands {
-            Commands::Clone { git, target } => {
-                if *git {
-                    let url = GitUrl::parse(target)?;
-                    let git = Git::default();
-                    git.clone(
-                        target,
-                        self.repo_dir()?
-                            .join("git")
-                            .join(url.host())
-                            .join(url.username())
-                            .join(url.path().strip_suffix(".git").unwrap_or(url.path()))
-                            .to_string_lossy(),
-                    )
-                    .await?;
-                } else {
-                    todo!("more repo types")
+            Commands::Clone { r#type: ty, target } => {
+                match ty.as_str() {
+                    "git" => {
+                        let url = GitUrl::parse(target)?;
+                        let git = Git::default();
+                        git.clone(
+                            target,
+                            self.repo_dir()?
+                                .join("git")
+                                .join(url.host())
+                                .join(url.username())
+                                .join(url.path().strip_suffix(".git").unwrap_or(url.path()))
+                                .to_string_lossy(),
+                        )
+                        .await?;
+                    }
+                    _ => {
+                        todo!("more repository type")
+                    }
                 }
                 Ok(())
             }
@@ -231,23 +261,29 @@ impl Rer {
                     self.default_open_with()
                         .ok_or(anyhow!("no default open with specified"))
                 })?;
-                for host_dir in std::fs::read_dir(self.repo_dir()?.join("git"))? {
-                    let target_dir = host_dir?.path().join(target);
-                    if target_dir.exists() {
-                        tokio::process::Command::new(open_with)
-                            .arg(target_dir.to_string_lossy().to_string())
-                            .stdout(Stdio::inherit())
-                            .spawn()?
-                            .wait()
-                            .await?;
-                        return Ok(());
+                for type_dir in std::fs::read_dir(self.repo_dir()?)? {
+                    for host_dir in std::fs::read_dir(type_dir?.path())? {
+                        let target_dir = host_dir?.path().join(target);
+                        if target_dir.exists() && target_dir.join(".git").exists() {
+                            tokio::process::Command::new(open_with)
+                                .arg(target_dir.to_string_lossy().to_string())
+                                .stdout(Stdio::inherit())
+                                .spawn()?
+                                .wait()
+                                .await?;
+                            return Ok(());
+                        }
                     }
                 }
                 Err(anyhow!("target not found"))
             }
             Commands::Config { edit, with } => {
                 if *edit {
-                    let with_editor = with.to_owned().ok_or_else(|| anyhow!("no editor specified"))?;
+                    let with_editor = with.to_owned().or_else(|| self.config.default_config_editor.to_owned()).or_else(|| if cfg!(target_os = "linux") {
+                        std::env::var("EDITOR").ok()
+                    } else {
+                        None
+                    }).ok_or_else(|| anyhow!("no editor specified"))?;
                     tokio::process::Command::new(with_editor)
                         .arg(self.config_file()?)
                         .stdout(Stdio::inherit())
@@ -258,6 +294,25 @@ impl Rer {
                 } else {
                     Err(anyhow!("unspecified behaviour"))
                 }
+            }
+            Commands::Create { r#type: ty, hostname, target } => {
+                match ty.as_str() {
+                    "git" => {
+                        Git::default().init(self.path_of(ty, hostname, "", target)?.to_string_lossy()).await?;
+                        Ok(())
+                    }
+                    _ => {
+                        todo!("more repository type")
+                    }
+                }
+            }
+            Commands::List { r#type, hostname } => {
+                for type_dir in std::fs::read_dir(self.repo_dir()?)? {
+                    for host_dir in std::fs::read_dir(type_dir?.path())? {
+                        todo!("list all repositories");
+                    }
+                }
+                todo!();
             }
         }
     }
