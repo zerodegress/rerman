@@ -55,7 +55,7 @@ pub enum Commands {
         r#type: Option<String>,
         #[arg(long)]
         hostname: Option<String>,
-    }
+    },
 }
 
 pub enum RerSetup {
@@ -140,8 +140,16 @@ impl Rer {
         }
     }
 
-    fn path_of(&self, ty: impl AsRef<str>, hostname: impl AsRef<str>, username: impl AsRef<str>, path: impl AsRef<str>) -> anyhow::Result<PathBuf> {
-        Ok((self.repo_dir()?).join(ty.as_ref()).join(hostname.as_ref())
+    fn path_of(
+        &self,
+        ty: impl AsRef<str>,
+        hostname: impl AsRef<str>,
+        username: impl AsRef<str>,
+        path: impl AsRef<str>,
+    ) -> anyhow::Result<PathBuf> {
+        Ok((self.repo_dir()?)
+            .join(ty.as_ref())
+            .join(hostname.as_ref())
             .join(username.as_ref())
             .join(path.as_ref()))
     }
@@ -207,7 +215,12 @@ impl Rer {
                                 .join("git")
                                 .join(url.host())
                                 .join(url.username())
-                                .join(url.path().strip_suffix(".git").unwrap_or(url.path()))
+                                .join(
+                                    url.path()
+                                        .strip_prefix('/')
+                                        .map(|x| x.strip_suffix(".git").unwrap_or(x))
+                                        .unwrap_or(url.path()),
+                                )
                                 .to_string_lossy(),
                         )
                         .await?;
@@ -279,11 +292,17 @@ impl Rer {
             }
             Commands::Config { edit, with } => {
                 if *edit {
-                    let with_editor = with.to_owned().or_else(|| self.config.default_config_editor.to_owned()).or_else(|| if cfg!(target_os = "linux") {
-                        std::env::var("EDITOR").ok()
-                    } else {
-                        None
-                    }).ok_or_else(|| anyhow!("no editor specified"))?;
+                    let with_editor = with
+                        .to_owned()
+                        .or_else(|| self.config.default_config_editor.to_owned())
+                        .or_else(|| {
+                            if cfg!(target_os = "linux") {
+                                std::env::var("EDITOR").ok()
+                            } else {
+                                None
+                            }
+                        })
+                        .ok_or_else(|| anyhow!("no editor specified"))?;
                     tokio::process::Command::new(with_editor)
                         .arg(self.config_file()?)
                         .stdout(Stdio::inherit())
@@ -295,17 +314,21 @@ impl Rer {
                     Err(anyhow!("unspecified behaviour"))
                 }
             }
-            Commands::Create { r#type: ty, hostname, target } => {
-                match ty.as_str() {
-                    "git" => {
-                        Git::default().init(self.path_of(ty, hostname, "", target)?.to_string_lossy()).await?;
-                        Ok(())
-                    }
-                    _ => {
-                        todo!("more repository type")
-                    }
+            Commands::Create {
+                r#type: ty,
+                hostname,
+                target,
+            } => match ty.as_str() {
+                "git" => {
+                    Git::default()
+                        .init(self.path_of(ty, hostname, "", target)?.to_string_lossy())
+                        .await?;
+                    Ok(())
                 }
-            }
+                _ => {
+                    todo!("more repository type")
+                }
+            },
             Commands::List { r#type, hostname } => {
                 for type_dir in std::fs::read_dir(self.repo_dir()?)? {
                     for host_dir in std::fs::read_dir(type_dir?.path())? {
