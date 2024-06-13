@@ -1,9 +1,36 @@
-use std::{path::PathBuf, process::Stdio};
+use std::{
+    fs::FileType,
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 
 use anyhow::anyhow;
 use lazy_regex::regex_captures;
 use tokio::process::Command;
 use url::Url;
+
+pub async fn filter_git_paths_recursively(base: impl AsRef<Path>) -> anyhow::Result<Vec<PathBuf>> {
+    let mut entries = tokio::fs::read_dir(base.as_ref()).await?;
+    let mut paths = vec![];
+    match entries.next_entry().await {
+        Err(err) => {
+            return Err(anyhow::Error::from(err));
+        }
+        Ok(None) => {}
+        Ok(Some(entry)) => {
+            if entry.file_type().await?.is_dir() {
+                let entry_path = entry.path();
+                let git_path = entry_path.join(".git");
+                if tokio::fs::try_exists(git_path).await? {
+                    paths.push(entry_path);
+                } else {
+                    paths.append(&mut Box::pin(filter_git_paths_recursively(entry_path)).await?);
+                }
+            }
+        }
+    }
+    Ok(paths)
+}
 
 pub struct Git {
     exe: String,
@@ -44,7 +71,7 @@ impl Git {
             .wait()
             .await
             .map_err(anyhow::Error::new)
-    } 
+    }
 }
 
 pub enum GitUrl {
