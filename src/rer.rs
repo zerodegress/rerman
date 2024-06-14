@@ -6,7 +6,7 @@ use tabled::Tabled;
 
 use crate::{
     config::Config,
-    git::{Git, GitUrl},
+    git::{filter_git_paths_recursively, Git, GitUrl},
 };
 
 #[derive(Parser)]
@@ -52,9 +52,13 @@ pub enum Commands {
     },
     List {
         #[arg(long)]
-        r#type: Option<String>,
+        filter_type: Option<String>,
         #[arg(long)]
-        hostname: Option<String>,
+        filter_hostname: Option<String>,
+        #[arg(long)]
+        filter_path: Option<String>,
+        #[arg(long, default_value = "false")]
+        json: bool,
     },
 }
 
@@ -71,13 +75,13 @@ pub struct Rer {
     config: Config,
 }
 
-#[derive(Tabled)]
+#[derive(Tabled, serde::Serialize)]
 pub struct RepoTableItem {
     path: String,
-    r#type: String,
+    #[tabled(rename = "type")]
+    ty: String,
     hostname: String,
 }
-
 impl Rer {
     fn default_open_with(&self) -> Option<String> {
         self.config.default_open_with.to_owned()
@@ -329,13 +333,61 @@ impl Rer {
                     todo!("more repository type")
                 }
             },
-            Commands::List { r#type, hostname } => {
+            Commands::List {
+                filter_type,
+                filter_hostname,
+                filter_path,
+                json,
+            } => {
+                let mut list = vec![];
+                let repo_dir_path = self.repo_dir()?;
                 for type_dir in std::fs::read_dir(self.repo_dir()?)? {
-                    for host_dir in std::fs::read_dir(type_dir?.path())? {
-                        todo!("list all repositories");
+                    let type_dir_path = type_dir?.path();
+                    let ty = type_dir_path
+                        .strip_prefix(&repo_dir_path)?
+                        .to_string_lossy()
+                        .to_string();
+                    if let Some(r#type) = filter_type {
+                        if !ty.contains(r#type) {
+                            continue;
+                        }
+                    }
+                    for host_dir in std::fs::read_dir(&type_dir_path)? {
+                        let host_dir_path = host_dir?.path();
+                        let host = host_dir_path
+                            .strip_prefix(&type_dir_path)?
+                            .to_string_lossy()
+                            .to_string();
+                        if let Some(hostname) = filter_hostname {
+                            if !host.contains(hostname) {
+                                continue;
+                            }
+                        }
+                        for repo_dir in filter_git_paths_recursively(&host_dir_path).await? {
+                            let repo_path = repo_dir
+                                .strip_prefix(&host_dir_path)?
+                                .to_string_lossy()
+                                .to_string();
+                            if let Some(filter_path) = filter_path {
+                                if !repo_path.contains(filter_path) {
+                                    continue;
+                                }
+                            }
+
+                            list.push(RepoTableItem {
+                                path: repo_path.to_owned(),
+                                ty: ty.to_owned(),
+                                hostname: host.to_owned(),
+                            });
+                        }
                     }
                 }
-                todo!();
+                if *json {
+                    println!("{}", serde_json::to_string(&list)?);
+                } else {
+                    println!("{}", tabled::Table::new(list));
+                }
+                Ok(())
             }
         }
     }
