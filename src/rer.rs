@@ -79,6 +79,7 @@ pub struct Rer {
 pub struct RepoTableItem {
     path: String,
     #[tabled(rename = "type")]
+    #[serde(rename = "type")]
     ty: String,
     hostname: String,
 }
