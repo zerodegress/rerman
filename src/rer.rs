@@ -214,18 +214,19 @@ impl Rer {
                     "git" => {
                         let url = GitUrl::parse(target)?;
                         let git = Git::default();
+                        println!("{}", url.path());
                         git.clone(
                             target,
                             self.repo_dir()?
                                 .join("git")
                                 .join(url.host())
                                 .join(url.username())
-                                .join(
-                                    url.path()
-                                        .strip_prefix('/')
-                                        .map(|x| x.strip_suffix(".git").unwrap_or(x))
-                                        .unwrap_or(url.path()),
-                                )
+                                .join({
+                                    let path = url.path();
+                                    let path = path.strip_prefix('/').unwrap_or(path);
+                                    let path = path.strip_suffix(".git").unwrap_or(path);
+                                    path
+                                })
                                 .to_string_lossy(),
                         )
                         .await?;
