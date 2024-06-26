@@ -214,7 +214,6 @@ impl Rer {
                     "git" => {
                         let url = GitUrl::parse(target)?;
                         let git = Git::default();
-                        println!("{}", url.path());
                         git.clone(
                             target,
                             self.repo_dir()?
