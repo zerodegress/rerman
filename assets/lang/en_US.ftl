@@ -1,0 +1,11 @@
+error-read-config-file = Config file read failed, try use default.
+error-invalid-config-dir = Config directory "{$dir}" is not valid.
+error-invalid-repo-dir = Repository directory "{$dir}" is not valid.
+error-no-default-open-with = No default open with program specified.
+error-target-not-found = Target not found.
+error-not-supported-system-setup-for-os = Current OS do not support system setup.
+error-get-base-dirs = Can not get base dirs.
+error-no-editor-specified = No editor specified.
+error-no-repo-dir-specified = No repository directory specified.
+error-not-supported-operation-for-os = Current OS do not support this operation.
+info-setup-completed = Setup completed: "{$file}"

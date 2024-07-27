@@ -76,6 +76,7 @@ impl Git {
     }
 }
 
+#[allow(dead_code)]
 pub enum GitUrl {
     Ssh {
         user: Option<String>,

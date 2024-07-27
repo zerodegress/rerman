@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "repo_dir": {
+      "type": "string"
+    },
+    "open_with": {
+      "type": "string"
+    },
+    "config_editor": {
+      "type": "string"
+    }
+  }
+}
